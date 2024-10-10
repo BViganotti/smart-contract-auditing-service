@@ -5,7 +5,7 @@ use solang_parser::pt::*;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
-use thiserror::Error;
+
 pub struct SmartContractAnalyzer {
     config: AnalyzerConfig,
 }
@@ -34,6 +34,7 @@ pub struct AnalysisResult {
     pub analysis_result: String,
     pub analysis_time: Duration,
     pub pattern_results: Vec<PatternMatchResult>,
+    pub error: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -42,20 +43,20 @@ pub struct PatternMatchResult {
     pub location: Loc,
 }
 
-#[derive(Debug, Default, Serialize, Deserialize)]
+#[derive(Debug, Default, Serialize, Deserialize, Clone)]
 pub struct GasUsage {
     pub estimated_deployment_cost: u64,
     pub estimated_function_costs: Vec<(String, u64)>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Vulnerability {
     pub severity: Severity,
     pub description: String,
     pub location: Loc,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub enum Severity {
     Low,
     Medium,
@@ -63,112 +64,88 @@ pub enum Severity {
     Critical,
 }
 
-#[derive(Error, Debug, Serialize, Deserialize)]
-pub enum AnalysisError {
-    #[error("Failed to parse contract: {0}")]
-    ParseError(String),
-    #[error("Analysis failed: {0}")]
-    AnalysisFailure(String),
-}
-
 impl SmartContractAnalyzer {
     pub fn new(config: AnalyzerConfig) -> Self {
         Self { config }
     }
 
-    pub fn analyze_smart_contract(
-        &self,
-        contract_code: &str,
-    ) -> Result<AnalysisResult, AnalysisError> {
+    pub fn analyze_smart_contract(&self, contract_code: &str) -> AnalysisResult {
         println!("Starting analysis of smart contract");
-        println!("lib.rs: Contract code: {}", contract_code);
         let start_time = Instant::now();
-        let result = Arc::new(Mutex::new(AnalysisResult::default()));
+        let mut result = AnalysisResult::default();
 
         // Parse the contract
-        let (pt, errors) =
-            parse(contract_code, 0).map_err(|e| AnalysisError::ParseError(format!("{:?}", e)))?;
+        let (pt, errors) = match parse(contract_code, 0) {
+            Ok((pt, errors)) => (pt, errors),
+            Err(e) => {
+                result.error = Some(format!("Failed to parse contract: {:?}", e));
+                return result;
+            }
+        };
+
         if !errors.is_empty() {
-            return Err(AnalysisError::ParseError(format!(
-                "Parse errors: {:?}",
-                errors
-            )));
+            result.error = Some(format!("Parse errors: {:?}", errors));
+            return result;
         }
 
         let node_count = self.count_nodes(&pt);
         if node_count > self.config.max_contract_size {
-            return Err(AnalysisError::AnalysisFailure(format!(
+            result.error = Some(format!(
                 "Contract size ({} nodes) exceeds maximum allowed size ({} nodes)",
                 node_count, self.config.max_contract_size
-            )));
+            ));
+            return result;
         }
-
-        let result_clone = Arc::clone(&result);
 
         // Perform various checks
         if self.config.enable_parallel {
-            self.parallel_analysis(&pt, result_clone)?;
+            self.parallel_analysis(&pt, &mut result);
         } else {
-            self.sequential_analysis(&pt, &mut result_clone.lock().unwrap())?;
+            self.sequential_analysis(&pt, &mut result);
         }
 
         // Perform static analysis
-        self.static_analysis(&mut result.lock().unwrap(), &pt);
+        self.static_analysis(&mut result, &pt);
 
-        result.lock().unwrap().analysis_time = start_time.elapsed();
-        result.lock().unwrap().analysis_result = if result.lock().unwrap().warnings.is_empty() {
+        result.analysis_time = start_time.elapsed();
+        result.analysis_result = if result.warnings.is_empty() {
             "No issues found".to_string()
         } else {
-            format!("{} issues found", result.lock().unwrap().warnings.len())
+            format!("{} issues found", result.warnings.len())
         };
 
-        match Arc::try_unwrap(result) {
-            Ok(mutex) => mutex.into_inner().map_err(|e| {
-                AnalysisError::AnalysisFailure(format!("Failed to unwrap mutex: {}", e))
-            }),
-            Err(_arc) => Err(AnalysisError::AnalysisFailure(
-                "Failed to unwrap Arc: multiple strong references exist".to_string(),
-            )),
-        }
+        result
     }
 
-    fn parallel_analysis(
-        &self,
-        pt: &SourceUnit,
-        result: Arc<Mutex<AnalysisResult>>,
-    ) -> Result<(), AnalysisError> {
-        let checks = vec![
-            (
-                "reentrancy",
-                Self::check_reentrancy as fn(&Self, &SourceUnit, &mut AnalysisResult),
-            ),
-            ("unchecked_calls", Self::check_unchecked_calls),
-            ("deprecated_functions", Self::check_deprecated_functions),
-            ("assert_require_revert", Self::check_assert_require_revert),
-            ("integer_overflow", Self::check_integer_overflow),
-            ("tx_origin", Self::check_tx_origin),
-            ("events", Self::check_events),
+    fn parallel_analysis(&self, pt: &SourceUnit, result: &mut AnalysisResult) {
+        let checks: Vec<(&str, fn(&Self, &SourceUnit, &mut AnalysisResult))> = vec![
+            ("Reentrancy", Self::check_reentrancy),
+            ("Unchecked External Calls", Self::check_unchecked_calls),
+            ("Integer Overflow/Underflow", Self::check_integer_overflow),
+            // Add more checks as needed
         ];
 
-        checks.par_iter().try_for_each(|&(name, check)| {
+        let result_arc = Arc::new(Mutex::new(AnalysisResult::default()));
+
+        checks.par_iter().for_each(|&(_name, check)| {
             let mut local_result = AnalysisResult::default();
             check(self, pt, &mut local_result);
-            let mut global_result = result.lock().map_err(|_| {
-                AnalysisError::AnalysisFailure(format!("Failed to acquire lock for {}", name))
-            })?;
-            global_result.warnings.extend(local_result.warnings);
-            global_result
+            let mut shared_result = result_arc.lock().unwrap();
+            shared_result.warnings.extend(local_result.warnings);
+            shared_result
                 .vulnerabilities
                 .extend(local_result.vulnerabilities);
-            Ok(())
-        })
+        });
+
+        // Merge the results back into the original result
+        let shared_result = result_arc.lock().unwrap();
+        result.warnings.extend(shared_result.warnings.clone());
+        result
+            .vulnerabilities
+            .extend(shared_result.vulnerabilities.clone());
     }
 
-    fn sequential_analysis(
-        &self,
-        pt: &SourceUnit,
-        result: &mut AnalysisResult,
-    ) -> Result<(), AnalysisError> {
+    fn sequential_analysis(&self, pt: &SourceUnit, result: &mut AnalysisResult) {
         self.check_reentrancy(pt, result);
         self.check_unchecked_calls(pt, result);
         self.check_deprecated_functions(pt, result);
@@ -176,7 +153,6 @@ impl SmartContractAnalyzer {
         self.check_integer_overflow(pt, result);
         self.check_tx_origin(pt, result);
         self.check_events(pt, result);
-        Ok(())
     }
 
     fn check_reentrancy(&self, pt: &SourceUnit, result: &mut AnalysisResult) {

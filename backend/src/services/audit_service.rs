@@ -15,15 +15,11 @@ impl AuditService {
     pub fn audit_contract(&self, contract: SmartContract) -> AnalysisResult {
         println!("audit_service: Auditing contract: {}", contract.id);
         println!("audit_service: Contract code: {}", contract.code);
-        match self.analyzer.analyze_smart_contract(&contract.code) {
-            Ok(result) => {
-                println!("audit_service: Audit completed successfully");
-                result
-            }
-            Err(e) => {
-                eprintln!("audit_service: Error during audit: {:?}", e);
-                AnalysisResult::default()
-            }
-        }
+        let result = self.analyzer.analyze_smart_contract(&contract.code);
+        println!("audit_service: Audit completed");
+        //if let Some(error) = &result.error {
+        //    eprintln!("audit_service: Error during audit: {}", error);
+        //}
+        result
     }
 }
