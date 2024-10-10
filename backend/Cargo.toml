@@ -1,0 +1,13 @@
+[package]
+name = "smart-contract-auditing-service"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+actix-web = "4.3.1"
+actix-multipart = "0.4"
+futures = "0.3"
+uuid = { version = "0.8", features = ["v4"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+smart_contract_analysis = { path = "../smart_contract_analysis" }

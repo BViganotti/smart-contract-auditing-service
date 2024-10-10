@@ -1,0 +1,10 @@
+backend/target
+smart_contract_analysis/target
+smart-contract-auditor-frontend/node_modules
+smart-contract-auditor-frontend/build
+smart-contract-auditor-frontend/dist
+smart-contract-auditor-frontend/public
+smart-contract-auditor-frontend/src/assets
+smart-contract-auditor-frontend/src/components/assets
+smart-contract-auditor-frontend/src/components/assets/images
+smart-contract-auditor-frontend/src/components/assets/images/logo.png

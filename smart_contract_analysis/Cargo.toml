@@ -1,0 +1,11 @@
+[package]
+name = "smart_contract_analysis"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+# Add your dependencies here
+thiserror = "1.0"
+rayon = "1.5"
+solang-parser = { version = "0.3.4", features = ["pt-serde"] }
+serde = { version = "1.0", features = ["derive"] }
