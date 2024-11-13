@@ -37,6 +37,12 @@ pub struct AnalysisResult {
     pub error: Option<String>,
 }
 
+impl AnalysisResult {
+    pub fn to_string(&self) -> String {
+        serde_json::to_string(self).unwrap()
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct PatternMatchResult {
     pub pattern_index: usize,
@@ -75,13 +81,19 @@ impl SmartContractAnalyzer {
         let mut result = AnalysisResult::default();
 
         // Parse the contract
-        let (pt, errors) = match parse(contract_code, 0) {
-            Ok((pt, errors)) => (pt, errors),
+        let (pt, messages) = match parse(contract_code, 0) {
+            Ok((pt, messages)) => (pt, messages),
             Err(e) => {
                 result.error = Some(format!("Failed to parse contract: {:?}", e));
                 return result;
             }
         };
+
+        // Filter out comments and only keep actual errors
+        let errors: Vec<_> = messages
+            .iter()
+            .filter(|msg| !msg.to_string().starts_with("// "))
+            .collect();
 
         if !errors.is_empty() {
             result.error = Some(format!("Parse errors: {:?}", errors));

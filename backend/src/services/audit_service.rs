@@ -17,6 +17,7 @@ impl AuditService {
         println!("audit_service: Contract code: {}", contract.code);
         let result = self.analyzer.analyze_smart_contract(&contract.code);
         println!("audit_service: Audit completed");
+        println!("audit_service: Audit result: {:?}", result.to_string());
         //if let Some(error) = &result.error {
         //    eprintln!("audit_service: Error during audit: {}", error);
         //}
