@@ -24,7 +24,13 @@ impl Default for AnalyzerConfig {
     }
 }
 
-#[derive(Default, Debug, Serialize, Deserialize)]
+#[derive(Debug, Default, Serialize)]
+pub struct GasUsage {
+    pub estimated_deployment_cost: u64,
+    pub estimated_function_costs: Vec<(String, u64)>,
+}
+
+#[derive(Debug, Serialize, Default)]
 pub struct AnalysisResult {
     pub warnings: Vec<String>,
     pub vulnerabilities: Vec<Vulnerability>,
@@ -33,7 +39,7 @@ pub struct AnalysisResult {
     pub function_complexities: HashMap<String, u32>,
     pub analysis_result: String,
     pub analysis_time: Duration,
-    pub pattern_results: Vec<PatternMatchResult>,
+    pub pattern_results: Vec<PatternResult>,
     pub error: Option<String>,
 }
 
@@ -43,23 +49,32 @@ impl AnalysisResult {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct PatternMatchResult {
+#[derive(Debug, Serialize, Default)]
+pub struct PatternResult {
     pub pattern_index: usize,
-    pub location: Loc,
+    pub location: Location,
 }
 
-#[derive(Debug, Default, Serialize, Deserialize, Clone)]
-pub struct GasUsage {
-    pub estimated_deployment_cost: u64,
-    pub estimated_function_costs: Vec<(String, u64)>,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Default, Clone)]
 pub struct Vulnerability {
-    pub severity: Severity,
+    pub severity: String,
     pub description: String,
-    pub location: Loc,
+    pub location: Location,
+}
+
+#[derive(Debug, Serialize, Default, Clone)]
+pub struct Location {
+    pub start: usize,
+    pub end: usize,
+}
+
+impl Location {
+    pub fn from_loc(loc: &Loc) -> Self {
+        Self {
+            start: loc.start(),
+            end: loc.end(),
+        }
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -68,6 +83,21 @@ pub enum Severity {
     Medium,
     High,
     Critical,
+}
+
+impl Default for Severity {
+    fn default() -> Self {
+        Severity::Low
+    }
+}
+
+impl ToString for Severity {
+    fn to_string(&self) -> String {
+        match self {
+            Severity::Low => "Low".to_string(),
+            _ => "".to_string(),
+        }
+    }
 }
 
 impl SmartContractAnalyzer {
@@ -126,6 +156,9 @@ impl SmartContractAnalyzer {
             format!("{} issues found", result.warnings.len())
         };
 
+        println!("Found {} vulnerabilities", result.vulnerabilities.len());
+        println!("Vulnerabilities: {:?}", result.vulnerabilities);
+
         result
     }
 
@@ -134,6 +167,10 @@ impl SmartContractAnalyzer {
             ("Reentrancy", Self::check_reentrancy),
             ("Unchecked External Calls", Self::check_unchecked_calls),
             ("Integer Overflow/Underflow", Self::check_integer_overflow),
+            ("Tx.origin", Self::check_tx_origin),
+            ("Events", Self::check_events),
+            ("Deprecated Functions", Self::check_deprecated_functions),
+            ("Assert/Require/Revert", Self::check_assert_require_revert),
             // Add more checks as needed
         ];
 
@@ -168,15 +205,20 @@ impl SmartContractAnalyzer {
     }
 
     fn check_reentrancy(&self, pt: &SourceUnit, result: &mut AnalysisResult) {
+        println!("Checking for reentrancy vulnerabilities...");
         for part in &pt.0 {
             if let SourceUnitPart::ContractDefinition(contract) = part {
                 for part in &contract.parts {
                     if let ContractPart::FunctionDefinition(func) = part {
                         if self.function_has_reentrancy(func) {
-                            result.warnings.push(format!(
-                                "Potential reentrancy in function '{}'",
-                                func.name.as_ref().map_or("unnamed", |n| &n.name)
-                            ));
+                            result.vulnerabilities.push(Vulnerability {
+                                severity: Severity::Critical.to_string(),
+                                description: format!(
+                                    "Potential reentrancy in function '{}'",
+                                    func.name.as_ref().map_or("unnamed", |n| &n.name)
+                                ),
+                                location: Location::from_loc(&func.loc),
+                            });
                         }
                     }
                 }
@@ -302,9 +344,11 @@ impl SmartContractAnalyzer {
             Expression::FunctionCall(loc, func, args) => {
                 if let Expression::MemberAccess(_, _, member) = &**func {
                     if member.name == "call" || member.name == "delegatecall" {
-                        result
-                            .warnings
-                            .push(format!("Unchecked external call at {:?}", loc));
+                        result.vulnerabilities.push(Vulnerability {
+                            severity: Severity::High.to_string(),
+                            description: "Unchecked external call".to_string(),
+                            location: Location::from_loc(loc),
+                        });
                     }
                 }
                 for arg in args {
@@ -477,10 +521,11 @@ impl SmartContractAnalyzer {
             Expression::Add(_, _, _)
             | Expression::Subtract(_, _, _)
             | Expression::Multiply(_, _, _) => {
-                result.warnings.push(format!(
-                    "Potential integer overflow at {:?}. Consider using SafeMath.",
-                    loc
-                ));
+                result.vulnerabilities.push(Vulnerability {
+                    severity: Severity::High.to_string(),
+                    description: "Potential integer overflow. Consider using SafeMath.".to_string(),
+                    location: Location::from_loc(loc),
+                });
             }
             // Add other expression types as needed
             _ => {}
@@ -524,12 +569,15 @@ impl SmartContractAnalyzer {
     ) {
         match expr {
             Expression::MemberAccess(_, _, member) if member.name == "origin" => {
-                result.warnings.push(format!(
-                    "Use of tx.origin at {:?}. Consider using msg.sender instead.",
-                    loc
-                ));
+                println!("Found tx.origin at {:?}", loc);
+                result.vulnerabilities.push(Vulnerability {
+                    severity: Severity::Medium.to_string(),
+                    description: "Use of tx.origin. Consider using msg.sender instead.".to_string(),
+                    location: Location::from_loc(loc),
+                });
             }
             // Add other expression types as needed
+            
             _ => {}
         }
     }
