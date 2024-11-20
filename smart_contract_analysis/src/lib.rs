@@ -137,40 +137,30 @@ impl SmartContractAnalyzer {
             return result;
         }
 
-        // Initialize analyzers and run analysis
+        // Initialize analyzers
+        let analyzers: Vec<Box<dyn VulnerabilityAnalyzer + Send>> = vec![
+            Box::new(IntegerOverflowAnalyzer::new()),
+            Box::new(ReentrancyAnalyzer::new()),
+            Box::new(UncheckedCallsAnalyzer::new()),
+            Box::new(DosAnalyzer::new()),
+            Box::new(TimestampAnalyzer::new()),
+            Box::new(AccessControlAnalyzer::new()),
+            Box::new(ComplexityAnalyzer::new()),
+            Box::new(GasAnalyzer::new()),
+        ];
+
+        // Run analyzers
         let vulnerabilities = if self.config.enable_parallel {
-            // Run analyzers in parallel using rayon
-            let analyzer_results: Vec<_> = vec![
-                IntegerOverflowAnalyzer::new(),
-                ReentrancyAnalyzer::new(),
-                UncheckedCallsAnalyzer::new(),
-                DosAnalyzer::new(),
-                TimestampAnalyzer::new(),
-                AccessControlAnalyzer::new(),
-                ComplexityAnalyzer::new(),
-                GasAnalyzer::new(),
-            ].into_par_iter()
-            .map(|analyzer| Box::new(analyzer).analyze(&pt))
-            .filter_map(Result::ok)
-            .collect();
-
-            // Flatten results into a single vector
-            analyzer_results.into_iter().flatten().collect()
+            analyzers
+                .into_par_iter()
+                .map(|mut analyzer| analyzer.analyze(&pt).unwrap_or_default())
+                .reduce(Vec::new, |mut acc, vulns| {
+                    acc.extend(vulns);
+                    acc
+                })
         } else {
-            // Sequential execution
-            let analyzers = vec![
-                Box::new(IntegerOverflowAnalyzer::new()),
-                Box::new(ReentrancyAnalyzer::new()),
-                Box::new(UncheckedCallsAnalyzer::new()),
-                Box::new(DosAnalyzer::new()),
-                Box::new(TimestampAnalyzer::new()),
-                Box::new(AccessControlAnalyzer::new()),
-                Box::new(ComplexityAnalyzer::new()),
-                Box::new(GasAnalyzer::new()),
-            ];
-
             let mut vulns = Vec::new();
-            for analyzer in analyzers {
+            for mut analyzer in analyzers {
                 if let Ok(analyzer_vulns) = analyzer.analyze(&pt) {
                     vulns.extend(analyzer_vulns);
                 }
