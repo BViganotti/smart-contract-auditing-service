@@ -218,7 +218,6 @@ impl SmartContractAnalyzer {
             ("Reentrancy", Self::check_reentrancy),
             ("Unchecked External Calls", Self::check_unchecked_calls),
             ("Integer Overflow/Underflow", Self::check_integer_overflow),
-            ("Tx.origin", Self::check_tx_origin),
             ("Events", Self::check_events),
             ("Deprecated Functions", Self::check_deprecated_functions),
             ("Assert/Require/Revert", Self::check_assert_require_revert),
@@ -233,45 +232,45 @@ impl SmartContractAnalyzer {
             ("Flash Loan Attack", Self::check_flash_loan_vulnerability),
             ("Signature Replay", Self::check_signature_replay),
             ("Uninitialized Storage", Self::check_uninitialized_storage),
-            ("Locked Ether", Self::check_locked_ether),
-            ("Arbitrary Jump", Self::check_arbitrary_jump),
+            //("Locked Ether", Self::check_locked_ether),
+            //("Arbitrary Jump", Self::check_arbitrary_jump),
             ("Delegate Call", Self::check_delegate_call),
             ("Block Gas Limit", Self::check_block_gas_limit),
             ("Function Default Visibility", Self::check_function_visibility),
             ("Unchecked Return Values", Self::check_unchecked_return_values),
             ("Short Address Attack", Self::check_short_address),
             ("Race Condition", Self::check_race_condition),
-            ("Denial of Service by Block Gas Limit", Self::check_dos_gas_limit),
-            ("Forcibly Sending Ether", Self::check_forcibly_sending_ether),
+            //("Denial of Service by Block Gas Limit", Self::check_dos_gas_limit),
+            //("Forcibly Sending Ether", Self::check_forcibly_sending_ether),
             ("Weak Random Number Generation", Self::check_weak_prng),
             ("Unchecked Constructor", Self::check_unchecked_constructor),
-            ("ERC20 Compliance", Self::check_erc20_compliance),
-            ("ERC721 Compliance", Self::check_erc721_compliance),
-            ("Proxy Pattern Safety", Self::check_proxy_pattern),
-            ("Cross-Contract Reentrancy", Self::check_cross_contract_reentrancy),
-            ("Oracle Manipulation", Self::check_oracle_manipulation),
-            ("Sandwich Attack Vulnerability", Self::check_sandwich_attack),
-            ("Malicious Token Integration", Self::check_malicious_token),
-            ("MEV Vulnerability", Self::check_mev_vulnerability),
-            ("Access Control Hierarchy", Self::check_access_control_hierarchy),
-            ("Centralization Risks", Self::check_centralization_risks),
-            ("Flashloan Resistance", Self::check_flashloan_resistance),
-            ("Price Oracle Freshness", Self::check_price_oracle_freshness),
-            ("Governance Attack Vectors", Self::check_governance_attack_vectors),
-            ("Composability Risks", Self::check_composability_risks),
-            ("ECDSA Implementation", Self::check_ecdsa_implementation),
-            ("Hash Function Usage", Self::check_hash_function_security),
-            ("Random Number Generation", Self::check_cryptographic_rng),
-            ("Key Management", Self::check_key_management),
-            ("Signature Malleability", Self::check_signature_malleability),
-            ("Zero Knowledge Proof", Self::check_zk_proof_implementation),
-            ("Commitment Scheme", Self::check_commitment_schemes),
-            ("Encryption Implementation", Self::check_encryption_implementation),
-            ("Digital Signature Usage", Self::check_digital_signature_usage),
-            ("Replay Protection", Self::check_advanced_replay_protection),
-            ("Cryptographic Protocol", Self::check_cryptographic_protocol),
-            ("Side Channel Resistance", Self::check_side_channel_resistance),
-            ("Timing Attack Vulnerability", Self::check_timing_attack),
+            //("ERC20 Compliance", Self::check_erc20_compliance),
+            //("ERC721 Compliance", Self::check_erc721_compliance),
+            //("Proxy Pattern Safety", Self::check_proxy_pattern),
+            //("Cross-Contract Reentrancy", Self::check_cross_contract_reentrancy),
+            //("Oracle Manipulation", Self::check_oracle_manipulation),
+            //("Sandwich Attack Vulnerability", Self::check_sandwich_attack),
+            //("Malicious Token Integration", Self::check_malicious_token),
+            //("MEV Vulnerability", Self::check_mev_vulnerability),
+            //("Access Control Hierarchy", Self::check_access_control_hierarchy),
+            //("Centralization Risks", Self::check_centralization_risks),
+            //("Flashloan Resistance", Self::check_flashloan_resistance),
+            //("Price Oracle Freshness", Self::check_price_oracle_freshness),
+            //("Governance Attack Vectors", Self::check_governance_attack_vectors),
+            //("Composability Risks", Self::check_composability_risks),
+            //("ECDSA Implementation", Self::check_ecdsa_implementation),
+            //("Hash Function Usage", Self::check_hash_function_security),
+            //("Random Number Generation", Self::check_cryptographic_rng),
+            //("Key Management", Self::check_key_management),
+            //("Signature Malleability", Self::check_signature_malleability),
+            //("Zero Knowledge Proof", Self::check_zk_proof_implementation),
+            //("Commitment Scheme", Self::check_commitment_schemes),
+            //("Encryption Implementation", Self::check_encryption_implementation),
+            //("Digital Signature Usage", Self::check_digital_signature_usage),
+            //("Replay Protection", Self::check_advanced_replay_protection),
+            //("Cryptographic Protocol", Self::check_cryptographic_protocol),
+            //("Side Channel Resistance", Self::check_side_channel_resistance),
+            //("Timing Attack Vulnerability", Self::check_timing_attack),
             ("Authorization", Self::check_tx_origin),
             ("Reentrancy", Self::check_reentrancy),
             ("Arithmetic", Self::check_integer_overflow),
@@ -450,19 +449,26 @@ impl SmartContractAnalyzer {
 
     fn check_loop_operations(&self, stmt: &Statement, gas_usage: &mut GasUsage) {
         match stmt {
-            Statement::ForLoop { body, .. } | Statement::WhileLoop { body, .. } => {
-                // Check for expensive operations inside loops
-                let expensive_ops = self.find_expensive_operations(body);
-                if !expensive_ops.is_empty() {
-                    gas_usage.estimated_function_costs.push((
-                        "loop_optimization".to_string(),
-                        expensive_ops.len() as u64 * 1000,
-                    ));
-                }
-            }
             Statement::Block { statements, .. } => {
                 for stmt in statements {
-                    self.check_loop_operations(stmt, gas_usage);
+                    self.check_loop_operations(stmt, gas_usage);match stmt {
+                        Statement::For(_, _, _, _, Some(body)) | Statement::While(_, _, body) => {
+                            // Check for expensive operations inside loops
+                            let expensive_ops = self.find_expensive_operations(body);
+                            if !expensive_ops.is_empty() {
+                                gas_usage.estimated_function_costs.push((
+                                    "loop_optimization".to_string(),
+                                    expensive_ops.len() as u64 * 1000,
+                                ));
+                            }
+                        }
+                        Statement::Block { statements, .. } => {
+                            for stmt in statements {
+                                self.check_loop_operations(stmt, gas_usage);
+                            }
+                        }
+                        _ => {}
+                    }
                 }
             }
             _ => {}
@@ -556,7 +562,7 @@ impl SmartContractAnalyzer {
             Expression::ArrayLiteral(_, elements) => {
                 gas_usage.estimated_deployment_cost += (elements.len() as u64) * 20;
             }
-            Expression::StringLiteral(_, value) => {
+            Expression::StringLiteral(value) => {
                 gas_usage.estimated_deployment_cost += (value.len() as u64) * 4;
             }
             _ => {}
@@ -609,103 +615,6 @@ impl SmartContractAnalyzer {
         }
     }
 
-    fn check_reentrancy(&self, pt: &SourceUnit, result: &mut AnalysisResult) {
-        for part in &pt.0 {
-            if let SourceUnitPart::ContractDefinition(contract) = part {
-                for part in &contract.parts {
-                    if let ContractPart::FunctionDefinition(func) = part {
-                        if self.function_has_reentrancy(func) {
-                            result.vulnerabilities.push(Vulnerability {
-                                severity: Severity::High.to_string(),
-                                description: format!(
-                                    "Potential reentrancy vulnerability in function '{}'. The function makes external calls and modifies state afterwards.",
-                                    func.name.as_ref().map_or("unnamed", |n| &n.name)
-                                ),
-                                location: Location::from_loc(&func.loc),
-                                code_snippet: None,
-                                recommendation: None,
-                                category: "Reentrancy".to_string(),
-                            });
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    fn function_has_reentrancy(&self, func: &FunctionDefinition) -> bool {
-        let mut has_external_call = false;
-        let mut has_state_change_after_call = false;
-
-        if let Some(body) = &func.body {
-            self.analyze_statement(
-                body,
-                &mut has_external_call,
-                &mut has_state_change_after_call,
-            );
-        }
-
-        has_external_call && has_state_change_after_call
-    }
-
-    fn analyze_statement(
-        &self,
-        stmt: &Statement,
-        has_external_call: &mut bool,
-        has_state_change_after_call: &mut bool,
-    ) {
-        match stmt {
-            Statement::Block { statements, .. } => {
-                for stmt in statements {
-                    self.analyze_statement(stmt, has_external_call, has_state_change_after_call);
-                }
-            }
-            Statement::Expression(_, expr) => {
-                self.analyze_expression(expr, has_external_call, has_state_change_after_call);
-            }
-            Statement::VariableDefinition(_, _, Some(expr)) => {
-                self.analyze_expression(expr, has_external_call, has_state_change_after_call);
-            }
-            Statement::If(_, cond, then_stmt, else_stmt) => {
-                self.analyze_expression(cond, has_external_call, has_state_change_after_call);
-                self.analyze_statement(then_stmt, has_external_call, has_state_change_after_call);
-                if let Some(else_stmt) = else_stmt {
-                    self.analyze_statement(else_stmt, has_external_call, has_state_change_after_call);
-                }
-            }
-            // Add other statement types as needed
-            _ => {}
-        }
-    }
-
-    fn analyze_expression(
-        &self,
-        expr: &Expression,
-        has_external_call: &mut bool,
-        has_state_change_after_call: &mut bool,
-    ) {
-        match expr {
-            Expression::FunctionCall(_, name, _) => {
-                if let Expression::MemberAccess(_, member_expr, member) = &**name {
-                    if let Expression::Variable(id) = &**member_expr {
-                        if id.name == "address"
-                            && (member.name == "call" || member.name == "delegatecall")
-                        {
-                            *has_external_call = true;
-                        }
-                    }
-                }
-            }
-            Expression::Assign(_, _, _) => {
-                if *has_external_call {
-                    *has_state_change_after_call = true;
-                }
-            }
-            // Add other expression types as needed
-            _ => {}
-        }
-    }
-
     fn check_unchecked_calls(&self, pt: &SourceUnit, result: &mut AnalysisResult) {
         for part in &pt.0 {
             if let SourceUnitPart::ContractDefinition(contract) = part {
@@ -735,7 +644,7 @@ impl SmartContractAnalyzer {
     }
 
     fn check_unchecked_calls_in_expression(&self, expr: &Expression, result: &mut AnalysisResult) {
-        if let Expression::FunctionCall(loc, func_expr, args) = expr {
+        if let Expression::FunctionCall(loc, func_expr, _) = expr {
             if let Expression::MemberAccess(_, _, member) = &**func_expr {
                 if member.name == "call" || member.name == "delegatecall" || member.name == "send" {
                     result.vulnerabilities.push(Vulnerability {
@@ -884,112 +793,6 @@ impl SmartContractAnalyzer {
         }
     }
 
-    fn check_integer_overflow(&self, pt: &SourceUnit, result: &mut AnalysisResult) {
-        for part in &pt.0 {
-            if let SourceUnitPart::ContractDefinition(contract) = part {
-                for part in &contract.parts {
-                    if let ContractPart::FunctionDefinition(func) = part {
-                        if let Some(body) = &func.body {
-                            self.check_integer_overflow_in_statement(body, result);
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    fn check_integer_overflow_in_statement(&self, stmt: &Statement, result: &mut AnalysisResult) {
-        match stmt {
-            Statement::Block { statements, .. } => {
-                for stmt in statements {
-                    self.check_integer_overflow_in_statement(stmt, result);
-                }
-            }
-            Statement::Expression(loc, expr) => {
-                self.check_integer_overflow_in_expression(loc, expr, result);
-            }
-            // Add other statement types as needed
-            _ => {}
-        }
-    }
-
-    fn check_integer_overflow_in_expression(
-        &self,
-        loc: &Loc,
-        expr: &Expression,
-        result: &mut AnalysisResult,
-    ) {
-        match expr {
-            Expression::Add(_, _, _) |
-            Expression::Subtract(_, _, _) |
-            Expression::Multiply(_, _, _) |
-            Expression::Divide(_, _, _) |
-            Expression::Modulo(_, _, _) => {
-                result.vulnerabilities.push(Vulnerability {
-                    severity: Severity::High.to_string(),
-                    description: "Potential integer overflow. Consider using SafeMath.".to_string(),
-                    location: Location::from_loc(loc),
-                    code_snippet: None,
-                    recommendation: None,
-                    category: "Integer Overflow".to_string(),
-                });
-            }
-            // Add other expression types as needed
-            _ => {}
-        }
-    }
-
-    fn check_tx_origin(&self, pt: &SourceUnit, result: &mut AnalysisResult) {
-        for part in &pt.0 {
-            if let SourceUnitPart::ContractDefinition(contract) = part {
-                for part in &contract.parts {
-                    if let ContractPart::FunctionDefinition(func) = part {
-                        if let Some(body) = &func.body {
-                            self.check_tx_origin_in_statement(body, result);
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    fn check_tx_origin_in_statement(&self, stmt: &Statement, result: &mut AnalysisResult) {
-        match stmt {
-            Statement::Block { statements, .. } => {
-                for stmt in statements {
-                    self.check_tx_origin_in_statement(stmt, result);
-                }
-            }
-            Statement::Expression(loc, expr) => {
-                self.check_tx_origin_in_expression(loc, expr, result);
-            }
-            // Add other statement types as needed
-            _ => {}
-        }
-    }
-
-    fn check_tx_origin_in_expression(
-        &self,
-        loc: &Loc,
-        expr: &Expression,
-        result: &mut AnalysisResult,
-    ) {
-        match expr {
-            Expression::MemberAccess(_, _, member) if member.name == "origin" => {
-                result.vulnerabilities.push(Vulnerability {
-                    severity: Severity::Medium.to_string(),
-                    description: "Use of tx.origin. Consider using msg.sender instead.".to_string(),
-                    location: Location::from_loc(loc),
-                    code_snippet: None,
-                    recommendation: None,
-                    category: "Tx.origin".to_string(),
-                });
-            }
-            // Add other expression types as needed
-            _ => {}
-        }
-    }
-
     fn check_events(&self, pt: &SourceUnit, result: &mut AnalysisResult) {
         for part in &pt.0 {
             if let SourceUnitPart::ContractDefinition(contract) = part {
@@ -1030,13 +833,11 @@ impl SmartContractAnalyzer {
                         }
                         ContractPart::FunctionDefinition(func) => {
                             // Check for onlyOwner-like modifiers
-                            if let Some(attributes) = &func.attributes {
-                                for attr in attributes {
-                                    if let Expression::FunctionCall(_, name, _) = &attr {
-                                        if let Expression::Variable(id) = &**name {
-                                            if id.name.contains("only") {
-                                                has_access_control = true;
-                                            }
+                            for attr in &func.attributes {
+                                if let Expression::FunctionCall(_, name, _) = attr {
+                                    if let Expression::Variable(id) = &**name {
+                                        if id.name.contains("only") {
+                                            has_access_control = true;
                                         }
                                     }
                                 }
@@ -1134,10 +935,7 @@ impl SmartContractAnalyzer {
                         if has_price_dependency && has_state_change {
                             result.vulnerabilities.push(Vulnerability {
                                 severity: Severity::High.to_string(),
-                                description: format!(
-                                    "Potential front-running vulnerability in function '{}'. The function depends on prices or balances and modifies state.",
-                                    func.name.as_ref().map_or("unnamed", |n| &n.name)
-                                ),
+                                description: format!("Potential front-running vulnerability in function '{}'. The function depends on prices or balances and modifies state.", func.name.as_ref().map_or("unnamed", |n| &n.name)),
                                 location: Location::from_loc(&func.loc),
                                 code_snippet: None,
                                 recommendation: Some("Consider implementing commit-reveal schemes or other front-running mitigation patterns.".to_string()),
@@ -1215,10 +1013,7 @@ impl SmartContractAnalyzer {
                             if has_price_dependency && has_external_call && has_state_change {
                                 result.vulnerabilities.push(Vulnerability {
                                     severity: Severity::Critical.to_string(),
-                                    description: format!(
-                                        "Potential flash loan vulnerability in function '{}'. The function depends on prices/balances, makes external calls, and modifies state.",
-                                        func.name.as_ref().map_or("unnamed", |n| &n.name)
-                                    ),
+                                    description: format!("Potential flash loan vulnerability in function '{}'. The function depends on prices/balances, makes external calls, and modifies state.", func.name.as_ref().map_or("unnamed", |n| &n.name)),
                                     location: Location::from_loc(&func.loc),
                                     code_snippet: None,
                                     recommendation: Some("Consider implementing checks against flash loan attacks, such as requiring minimum time locks or using cumulative price oracles.".to_string()),
@@ -1241,21 +1036,11 @@ impl SmartContractAnalyzer {
     ) {
         match stmt {
             Statement::Expression(_, expr) => {
-                self.analyze_flash_loan_expression(
-                    expr,
-                    has_price_dependency,
-                    has_external_call,
-                    has_state_change,
-                );
+                self.analyze_flash_loan_expression(expr, has_price_dependency, has_external_call, has_state_change);
             }
             Statement::Block { statements, .. } => {
                 for stmt in statements {
-                    self.analyze_flash_loan_vulnerability(
-                        stmt,
-                        has_price_dependency,
-                        has_external_call,
-                        has_state_change,
-                    );
+                    self.analyze_flash_loan_vulnerability(stmt, has_price_dependency, has_external_call, has_state_change);
                 }
             }
             _ => {}
@@ -1454,13 +1239,17 @@ impl SmartContractAnalyzer {
                     self.analyze_delegate_call(stmt, has_delegate_call, has_input_validation);
                 }
             }
-            Statement::If { condition, .. } => {
+            Statement::If(_, condition, then_stmt, else_stmt) => {
                 if let Expression::FunctionCall(_, func, _) = condition {
                     if let Expression::MemberAccess(_, _, member) = &**func {
                         if member.name == "delegatecall" {
                             *has_input_validation = true;
                         }
                     }
+                }
+                self.analyze_delegate_call(then_stmt, has_delegate_call, has_input_validation);
+                if let Some(else_stmt) = else_stmt {
+                    self.analyze_delegate_call(else_stmt, has_delegate_call, has_input_validation);
                 }
             }
             Statement::Expression(_, expr) => {
@@ -1513,13 +1302,17 @@ impl SmartContractAnalyzer {
             Statement::For { .. } | Statement::While { .. } => {
                 *has_loop = true;
             }
-            Statement::If { condition, .. } => {
+            Statement::If(_, condition, then_stmt, else_stmt) => {
                 if let Expression::MemberAccess(_, obj, member) = condition {
                     if let Expression::Variable(id) = &**obj {
                         if id.name == "gasleft" || member.name == "gas" {
                             *has_gas_check = true;
                         }
                     }
+                }
+                self.analyze_gas_usage(then_stmt, has_loop, has_array_operation, has_gas_check);
+                if let Some(else_stmt) = else_stmt {
+                    self.analyze_gas_usage(else_stmt, has_loop, has_array_operation, has_gas_check);
                 }
             }
             Statement::Expression(_, expr) => {
@@ -1561,10 +1354,7 @@ impl SmartContractAnalyzer {
                         if !has_visibility {
                             result.warnings.push(FormattedWarning {
                                 category: "Function Visibility".to_string(),
-                                message: format!(
-                                    "Function '{}' has no explicit visibility specifier",
-                                    func.name.as_ref().map_or("unnamed", |n| &n.name)
-                                ),
+                                message: format!("Function '{}' has no explicit visibility specifier", func.name.as_ref().map_or("unnamed", |n| &n.name)),
                                 line_number: func.loc.start(),
                                 code_snippet: "".to_string(),
                             });
@@ -1610,13 +1400,17 @@ impl SmartContractAnalyzer {
                     self.analyze_return_checks(stmt, has_external_call, has_return_check);
                 }
             }
-            Statement::If { condition, .. } => {
+            Statement::If(_, condition, then_stmt, else_stmt) => {
                 if let Expression::FunctionCall(_, func, _) = condition {
                     if let Expression::MemberAccess(_, _, member) = &**func {
                         if ["call", "send", "transfer"].contains(&member.name.as_str()) {
                             *has_return_check = true;
                         }
                     }
+                }
+                self.analyze_return_checks(then_stmt, has_external_call, has_return_check);
+                if let Some(else_stmt) = else_stmt {
+                    self.analyze_return_checks(else_stmt, has_external_call, has_return_check);
                 }
             }
             Statement::Expression(_, expr) => {
@@ -1637,17 +1431,16 @@ impl SmartContractAnalyzer {
             if let SourceUnitPart::ContractDefinition(contract) = part {
                 for part in &contract.parts {
                     if let ContractPart::FunctionDefinition(func) = part {
-                        if let Some(params) = &func.params {
-                            for param in params {
-                                if let Some(typ) = &param.typ {
-                                    if typ.to_string().contains("address") {
-                                        result.warnings.push(FormattedWarning {
-                                            category: "Short Address".to_string(),
-                                            message: format!("Function '{}' accepts address parameter. Verify input length to prevent short address attacks.", func.name.as_ref().map_or("unnamed", |n| &n.name)),
-                                            line_number: func.loc.start(),
-                                            code_snippet: "".to_string(),
-                                        });
-                                    }
+                        for param in &func.params {
+                            if let (_, Some(param)) = param {
+                                let type_str = param.ty.to_string().to_lowercase();
+                                if type_str.contains("address") {
+                                    result.warnings.push(FormattedWarning {
+                                        category: "Short Address".to_string(),
+                                        message: format!("Function '{}' accepts address parameter. Verify input length to prevent short address attacks.", func.name.as_ref().map_or("unnamed", |n| &n.name)),
+                                        line_number: func.loc.start(),
+                                        code_snippet: "".to_string(),
+                                    });
                                 }
                             }
                         }
@@ -1701,12 +1494,12 @@ impl SmartContractAnalyzer {
 
     fn analyze_race_condition_expr(&self, expr: &Expression, has_state_change: &mut bool, has_external_dependency: &mut bool) {
         match expr {
-            Expression::Assignment(..) => {
+            Expression::Assign(..) => {
                 *has_state_change = true;
             }
             Expression::FunctionCall(_, func, _) => {
                 if let Expression::MemberAccess(_, _, member) = &**func {
-                    if ["call", "send", "transfer"].contains(&member.name.as_str()) {
+                    if ["transfer", "send", "call", "delegatecall"].contains(&member.name.as_str()) {
                         *has_external_dependency = true;
                     }
                 }
@@ -1721,21 +1514,23 @@ impl SmartContractAnalyzer {
                 for part in &contract.parts {
                     if let ContractPart::FunctionDefinition(func) = part {
                         if let Some(body) = &func.body {
-                            let mut uses_block_hash = false;
-                            let mut uses_timestamp = false;
-                            let mut uses_block_number = false;
+                            let mut uses_weak_source = false;
+                            let mut has_entropy_source = false;
+                            let mut has_seed_protection = false;
+                            let mut has_critical_operation = false;
                             
-                            self.analyze_random_source(
+                            self.analyze_randomness_comprehensive(
                                 body,
-                                &mut uses_block_hash,
-                                &mut uses_timestamp,
-                                &mut uses_block_number
+                                &mut uses_weak_source,
+                                &mut has_entropy_source,
+                                &mut has_seed_protection,
+                                &mut has_critical_operation
                             );
                             
-                            if uses_block_hash || uses_timestamp || uses_block_number {
+                            if uses_weak_source && !has_entropy_source && has_critical_operation {
                                 result.vulnerabilities.push(Vulnerability {
                                     severity: Severity::High.to_string(),
-                                    description: "Weak random number generation in function '{}'", func.name.as_ref().map_or("unnamed", |n| &n.name),
+                                    description: format!("Weak random number generation in function '{}'", func.name.as_ref().map_or("unnamed", |n| &n.name)),
                                     location: Location::from_loc(&func.loc),
                                     code_snippet: None,
                                     recommendation: Some("Use a secure source of randomness such as Chainlink VRF.".to_string()),
@@ -1749,37 +1544,69 @@ impl SmartContractAnalyzer {
         }
     }
 
-    fn analyze_random_source(&self, stmt: &Statement, uses_weak_source: &mut bool, has_entropy_source: &mut bool, has_seed_protection: &mut bool) {
+    fn analyze_randomness_comprehensive(
+        &self,
+        stmt: &Statement,
+        uses_weak_source: &mut bool,
+        has_entropy_source: &mut bool,
+        has_seed_protection: &mut bool,
+        has_critical_operation: &mut bool
+    ) {
         match stmt {
             Statement::Block { statements, loc: _, unchecked: _ } => {
                 for stmt in statements {
-                    self.analyze_random_source(stmt, uses_weak_source, has_entropy_source, has_seed_protection);
+                    self.analyze_randomness_comprehensive(
+                        stmt,
+                        uses_weak_source,
+                        has_entropy_source,
+                        has_seed_protection,
+                        has_critical_operation
+                    );
                 }
             }
             Statement::Expression(_, expr) => {
-                self.analyze_random_source_expr(expr, uses_weak_source, has_entropy_source, has_seed_protection);
+                self.analyze_randomness_expr_comprehensive(
+                    expr,
+                    uses_weak_source,
+                    has_entropy_source,
+                    has_seed_protection,
+                    has_critical_operation
+                );
             }
             _ => {}
         }
     }
 
-    fn analyze_random_source_expr(&self, expr: &Expression, uses_weak_source: &mut bool, has_entropy_source: &mut bool, has_seed_protection: &mut bool) {
+    fn analyze_randomness_expr_comprehensive(
+        &self,
+        expr: &Expression,
+        uses_weak_source: &mut bool,
+        has_entropy_source: &mut bool,
+        has_seed_protection: &mut bool,
+        has_critical_operation: &mut bool
+    ) {
         match expr {
             Expression::MemberAccess(_, obj, member) => {
                 if let Expression::Variable(id) = &**obj {
-                    if (id.name == "block" && (member.name == "timestamp" || member.name == "number" || member.name == "difficulty")) ||
-                       (id.name == "msg" && member.name == "sender") {
+                    if id.name == "block" && (member.name == "timestamp" || member.name == "number" || member.name == "difficulty") {
                         *uses_weak_source = true;
                     }
                 }
             }
             Expression::FunctionCall(_, func, _) => {
                 if let Expression::MemberAccess(_, _, member) = &**func {
-                    if member.name == "random" {
-                        *has_entropy_source = true;
-                    }
-                    if member.name == "seed" {
-                        *has_seed_protection = true;
+                    match member.name.as_str() {
+                        "random" => {
+                            *has_entropy_source = true;
+                            *has_critical_operation = true;
+                        }
+                        "seed" => {
+                            *has_seed_protection = true;
+                        }
+                        "transfer" | "send" | "mint" => {
+                            *has_critical_operation = true;
+                        }
+                        _ => {}
                     }
                 }
             }
@@ -2033,8 +1860,15 @@ impl SmartContractAnalyzer {
                     if let ContractPart::VariableDefinition(var) = part {
                         if let Expression::Type(_, ty) = &var.ty {
                             let size = self.get_type_size(ty);
-                            if let Some(name) = &var.name {
-                                slot_types.push((name.name.clone(), size));
+                            
+                            // Check if variable can fit in current slot
+                            if size <= 32 {
+                                // Start new slot
+                                slot_types.push((size, 32));
+                                slot_count += 1;
+                            } else {
+                                // Start new slot
+                                slot_types.push((size, size));
                                 slot_count += (size + 31) / 32; // Round up to nearest slot
                             }
                         }
@@ -2044,10 +1878,10 @@ impl SmartContractAnalyzer {
                 // Check for inefficient storage layout
                 if !slot_types.is_empty() {
                     let mut sorted_slots = slot_types.clone();
-                    sorted_slots.sort_by(|a, b| b.1.cmp(&a.1)); // Sort by size descending
+                    sorted_slots.sort_by(|a, b| b.0.cmp(&a.0)); // Sort by size descending
 
-                    let current_size: u32 = slot_types.iter().map(|(_, size)| (size + 31) / 32 * 32).sum();
-                    let optimal_size: u32 = sorted_slots.iter().map(|(_, size)| (size + 31) / 32 * 32).sum();
+                    let current_size: u32 = slot_types.iter().map(|(size, _)| size).sum();
+                    let optimal_size: u32 = sorted_slots.iter().map(|(size, _)| size).sum();
 
                     if current_size > optimal_size {
                         result.warnings.push(FormattedWarning {
@@ -2103,76 +1937,6 @@ impl SmartContractAnalyzer {
                     }
                 }
             }
-        }
-    }
-
-    fn analyze_randomness_comprehensive(
-        &self,
-        stmt: &Statement,
-        uses_weak_source: &mut bool,
-        has_entropy_source: &mut bool,
-        has_seed_protection: &mut bool,
-        has_critical_operation: &mut bool
-    ) {
-        match stmt {
-            Statement::Block { statements, loc: _, unchecked: _ } => {
-                for stmt in statements {
-                    self.analyze_randomness_comprehensive(
-                        stmt,
-                        uses_weak_source,
-                        has_entropy_source,
-                        has_seed_protection,
-                        has_critical_operation
-                    );
-                }
-            }
-            Statement::Expression(_, expr) => {
-                self.analyze_randomness_expr_comprehensive(
-                    expr,
-                    uses_weak_source,
-                    has_entropy_source,
-                    has_seed_protection,
-                    has_critical_operation
-                );
-            }
-            _ => {}
-        }
-    }
-
-    fn analyze_randomness_expr_comprehensive(
-        &self,
-        expr: &Expression,
-        uses_weak_source: &mut bool,
-        has_entropy_source: &mut bool,
-        has_seed_protection: &mut bool,
-        has_critical_operation: &mut bool
-    ) {
-        match expr {
-            Expression::MemberAccess(_, obj, member) => {
-                if let Expression::Variable(id) = &**obj {
-                    if id.name == "block" && (member.name == "timestamp" || member.name == "number" || member.name == "difficulty") {
-                        *uses_weak_source = true;
-                    }
-                }
-            }
-            Expression::FunctionCall(_, func, _) => {
-                if let Expression::MemberAccess(_, _, member) = &**func {
-                    match member.name.as_str() {
-                        "random" => {
-                            *has_entropy_source = true;
-                            *has_critical_operation = true;
-                        }
-                        "seed" => {
-                            *has_seed_protection = true;
-                        }
-                        "transfer" | "send" | "mint" => {
-                            *has_critical_operation = true;
-                        }
-                        _ => {}
-                    }
-                }
-            }
-            _ => {}
         }
     }
 
@@ -2401,7 +2165,7 @@ impl SmartContractAnalyzer {
             }
             Statement::If(_, condition, then_stmt, else_stmt) => {
                 if let Expression::Less(_, _, _) | Expression::More(_, _, _) |
-                   Expression::LessEqual(_, _, _) | Expression::MoreEqual(_, _, _) => {
+                   Expression::LessEqual(_, _, _) | Expression::MoreEqual(_, _, _) = condition {
                     *has_bounds_check = true;
                 }
                 self.analyze_arithmetic_precision(then_stmt, has_division, has_safe_math, has_bounds_check);
@@ -2418,10 +2182,8 @@ impl SmartContractAnalyzer {
 
     fn analyze_arithmetic_expr(&self, expr: &Expression, has_division: &mut bool, has_safe_math: &mut bool) {
         match expr {
-            Expression::BinaryOperation(_, op, _, _) => {
-                if op == "/" {
-                    *has_division = true;
-                }
+            Expression::Divide(_, _, _) => {
+                *has_division = true;
             }
             Expression::FunctionCall(_, func, _) => {
                 if let Expression::MemberAccess(_, _, member) = &**func {
@@ -2576,7 +2338,7 @@ impl SmartContractAnalyzer {
                     }
                 }
             }
-            Expression::Assignment(..) => {
+            Expression::Assign(..) => {
                 *has_state_update = true;
             }
             _ => {}
@@ -2621,7 +2383,7 @@ impl SmartContractAnalyzer {
             }
             Statement::If(_, condition, then_stmt, else_stmt) => {
                 if let Expression::Less(_, _, _) | Expression::More(_, _, _) |
-                   Expression::LessEqual(_, _, _) | Expression::MoreEqual(_, _, _) => {
+                   Expression::LessEqual(_, _, _) | Expression::MoreEqual(_, _, _) = condition {
                     *has_bounds_check = true;
                 }
                 self.analyze_integer_overflow(then_stmt, has_arithmetic, has_safe_math, has_bounds_check);
