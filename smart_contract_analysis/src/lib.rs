@@ -534,7 +534,7 @@ impl SmartContractAnalyzer {
 
     fn check_memory_usage(&self, stmt: &Statement, gas_usage: &mut GasUsage) {
         match stmt {
-            Statement::Block { statements, loc: _, unchecked: _ } => {
+            Statement::Block { statements, .. } => {
                 for stmt in statements {
                     self.check_memory_usage(stmt, gas_usage);
                 }
@@ -670,11 +670,7 @@ impl SmartContractAnalyzer {
                 self.analyze_expression(cond, has_external_call, has_state_change_after_call);
                 self.analyze_statement(then_stmt, has_external_call, has_state_change_after_call);
                 if let Some(else_stmt) = else_stmt {
-                    self.analyze_statement(
-                        else_stmt,
-                        has_external_call,
-                        has_state_change_after_call,
-                    );
+                    self.analyze_statement(else_stmt, has_external_call, has_state_change_after_call);
                 }
             }
             // Add other statement types as needed
@@ -924,11 +920,11 @@ impl SmartContractAnalyzer {
         result: &mut AnalysisResult,
     ) {
         match expr {
-            Expression::Add(_, _, _)
-            | Expression::Subtract(_, _, _)
-            | Expression::Multiply(_, _, _)
-            | Expression::Divide(_, _, _)
-            | Expression::Modulo(_, _, _) => {
+            Expression::Add(_, _, _) |
+            Expression::Subtract(_, _, _) |
+            Expression::Multiply(_, _, _) |
+            Expression::Divide(_, _, _) |
+            Expression::Modulo(_, _, _) => {
                 result.vulnerabilities.push(Vulnerability {
                     severity: Severity::High.to_string(),
                     description: "Potential integer overflow. Consider using SafeMath.".to_string(),
@@ -1317,10 +1313,7 @@ impl SmartContractAnalyzer {
                             if has_signature_validation && !has_nonce_check {
                                 result.vulnerabilities.push(Vulnerability {
                                     severity: Severity::High.to_string(),
-                                    description: format!(
-                                        "Potential signature replay vulnerability in function '{}'. Signatures are validated but nonces are not checked.",
-                                        func.name.as_ref().map_or("unnamed", |n| &n.name)
-                                    ),
+                                    description: format!("Potential signature replay vulnerability in function '{}'. Signatures are validated but nonces are not checked.", func.name.as_ref().map_or("unnamed", |n| &n.name)),
                                     location: Location::from_loc(&func.loc),
                                     code_snippet: None,
                                     recommendation: Some("Implement nonce checking for signatures to prevent replay attacks.".to_string()),
@@ -1859,22 +1852,22 @@ impl SmartContractAnalyzer {
                 .iter()
                 .map(|s| self.calculate_statement_complexity(s))
                 .sum(),
-            Statement::If(_, cond, then_stmt, else_stmt) => {
-                1 + self.calculate_expression_complexity(cond)
+            Statement::If(_, condition, then_stmt, else_stmt) => {
+                1 + self.calculate_expression_complexity(condition)
                     + self.calculate_statement_complexity(then_stmt)
                     + else_stmt
                         .as_ref()
                         .map_or(0, |s| self.calculate_statement_complexity(s))
             }
-            Statement::While(_, cond, body) => {
-                1 + self.calculate_expression_complexity(cond)
+            Statement::While(_, condition, body) => {
+                1 + self.calculate_expression_complexity(condition)
                     + self.calculate_statement_complexity(body)
             }
-            Statement::For(_, init, cond, update, body) => {
+            Statement::For(_, init, condition, update, body) => {
                 1 + init
                     .as_ref()
                     .map_or(0, |s| self.calculate_statement_complexity(s))
-                    + cond
+                    + condition
                         .as_ref()
                         .map_or(0, |e| self.calculate_expression_complexity(e))
                     + update
@@ -2007,12 +2000,6 @@ impl SmartContractAnalyzer {
             | Expression::Multiply(_, left, right)
             | Expression::Divide(_, left, right)
             | Expression::Modulo(_, left, right)
-            | Expression::Power(_, left, right)
-            | Expression::BitwiseOr(_, left, right)
-            | Expression::BitwiseAnd(_, left, right)
-            | Expression::BitwiseXor(_, left, right)
-            | Expression::ShiftLeft(_, left, right)
-            | Expression::ShiftRight(_, left, right)
             | Expression::And(_, left, right)
             | Expression::Or(_, left, right)
             | Expression::Less(_, left, right)
@@ -2086,18 +2073,29 @@ impl SmartContractAnalyzer {
                 for part in &contract.parts {
                     if let ContractPart::FunctionDefinition(func) = part {
                         if let Some(body) = &func.body {
-                            let mut uses_weak_randomness = false;
+                            let mut uses_weak_source = false;
+                            let mut has_entropy_source = false;
+                            let mut has_seed_protection = false;
                             let mut has_critical_operation = false;
                             
-                            self.analyze_randomness(body, &mut uses_weak_randomness, &mut has_critical_operation);
+                            self.analyze_randomness_comprehensive(
+                                body,
+                                &mut uses_weak_source,
+                                &mut has_entropy_source,
+                                &mut has_seed_protection,
+                                &mut has_critical_operation
+                            );
                             
-                            if uses_weak_randomness && has_critical_operation {
+                            if uses_weak_source && !has_entropy_source && has_critical_operation {
                                 result.vulnerabilities.push(Vulnerability {
                                     severity: Severity::High.to_string(),
-                                    description: "Use of weak randomness source in critical operation".to_string(),
+                                    description: format!(
+                                        "Weak random number generation in function '{}'",
+                                        func.name.as_ref().map_or("unnamed", |n| &n.name)
+                                    ),
                                     location: Location::from_loc(&func.loc),
                                     code_snippet: None,
-                                    recommendation: Some("Use a secure source of randomness such as Chainlink VRF".to_string()),
+                                    recommendation: Some("Use a secure source of randomness such as Chainlink VRF.".to_string()),
                                     category: "Randomness".to_string(),
                                 });
                             }
@@ -2108,33 +2106,69 @@ impl SmartContractAnalyzer {
         }
     }
 
-    fn analyze_randomness(&self, stmt: &Statement, uses_weak_randomness: &mut bool, has_critical_operation: &mut bool) {
+    fn analyze_randomness_comprehensive(
+        &self,
+        stmt: &Statement,
+        uses_weak_source: &mut bool,
+        has_entropy_source: &mut bool,
+        has_seed_protection: &mut bool,
+        has_critical_operation: &mut bool
+    ) {
         match stmt {
             Statement::Block { statements, loc: _, unchecked: _ } => {
                 for stmt in statements {
-                    self.analyze_randomness(stmt, uses_weak_randomness, has_critical_operation);
+                    self.analyze_randomness_comprehensive(
+                        stmt,
+                        uses_weak_source,
+                        has_entropy_source,
+                        has_seed_protection,
+                        has_critical_operation
+                    );
                 }
             }
             Statement::Expression(_, expr) => {
-                self.analyze_randomness_expr(expr, uses_weak_randomness, has_critical_operation);
+                self.analyze_randomness_expr_comprehensive(
+                    expr,
+                    uses_weak_source,
+                    has_entropy_source,
+                    has_seed_protection,
+                    has_critical_operation
+                );
             }
             _ => {}
         }
     }
 
-    fn analyze_randomness_expr(&self, expr: &Expression, uses_weak_randomness: &mut bool, has_critical_operation: &mut bool) {
+    fn analyze_randomness_expr_comprehensive(
+        &self,
+        expr: &Expression,
+        uses_weak_source: &mut bool,
+        has_entropy_source: &mut bool,
+        has_seed_protection: &mut bool,
+        has_critical_operation: &mut bool
+    ) {
         match expr {
             Expression::MemberAccess(_, obj, member) => {
                 if let Expression::Variable(id) = &**obj {
                     if id.name == "block" && (member.name == "timestamp" || member.name == "number" || member.name == "difficulty") {
-                        *uses_weak_randomness = true;
+                        *uses_weak_source = true;
                     }
                 }
             }
             Expression::FunctionCall(_, func, _) => {
                 if let Expression::MemberAccess(_, _, member) = &**func {
-                    if member.name == "random" {
-                        *has_critical_operation = true;
+                    match member.name.as_str() {
+                        "random" => {
+                            *has_entropy_source = true;
+                            *has_critical_operation = true;
+                        }
+                        "seed" => {
+                            *has_seed_protection = true;
+                        }
+                        "transfer" | "send" | "mint" => {
+                            *has_critical_operation = true;
+                        }
+                        _ => {}
                     }
                 }
             }
@@ -2336,11 +2370,12 @@ impl SmartContractAnalyzer {
                     if let ContractPart::FunctionDefinition(func) = part {
                         if let Some(body) = &func.body {
                             let mut has_division = false;
-                            let mut has_precision_loss = false;
+                            let mut has_safe_math = false;
+                            let mut has_bounds_check = false;
                             
-                            self.analyze_arithmetic_precision(body, &mut has_division, &mut has_precision_loss);
+                            self.analyze_arithmetic_precision(body, &mut has_division, &mut has_safe_math, &mut has_bounds_check);
                             
-                            if has_division && has_precision_loss {
+                            if has_division && !has_safe_math && !has_bounds_check {
                                 result.vulnerabilities.push(Vulnerability {
                                     severity: Severity::Medium.to_string(),
                                     description: "Potential precision loss in arithmetic operations".to_string(),
@@ -2357,26 +2392,42 @@ impl SmartContractAnalyzer {
         }
     }
 
-    fn analyze_arithmetic_precision(&self, stmt: &Statement, has_division: &mut bool, has_precision_loss: &mut bool) {
+    fn analyze_arithmetic_precision(&self, stmt: &Statement, has_division: &mut bool, has_safe_math: &mut bool, has_bounds_check: &mut bool) {
         match stmt {
             Statement::Block { statements, loc: _, unchecked: _ } => {
                 for stmt in statements {
-                    self.analyze_arithmetic_precision(stmt, has_division, has_precision_loss);
+                    self.analyze_arithmetic_precision(stmt, has_division, has_safe_math, has_bounds_check);
+                }
+            }
+            Statement::If(_, condition, then_stmt, else_stmt) => {
+                if let Expression::Less(_, _, _) | Expression::More(_, _, _) |
+                   Expression::LessEqual(_, _, _) | Expression::MoreEqual(_, _, _) => {
+                    *has_bounds_check = true;
+                }
+                self.analyze_arithmetic_precision(then_stmt, has_division, has_safe_math, has_bounds_check);
+                if let Some(else_stmt) = else_stmt {
+                    self.analyze_arithmetic_precision(else_stmt, has_division, has_safe_math, has_bounds_check);
                 }
             }
             Statement::Expression(_, expr) => {
-                self.analyze_arithmetic_expr(expr, has_division, has_precision_loss);
+                self.analyze_arithmetic_expr(expr, has_division, has_safe_math);
             }
             _ => {}
         }
     }
 
-    fn analyze_arithmetic_expr(&self, expr: &Expression, has_division: &mut bool, has_precision_loss: &mut bool) {
+    fn analyze_arithmetic_expr(&self, expr: &Expression, has_division: &mut bool, has_safe_math: &mut bool) {
         match expr {
             Expression::BinaryOperation(_, op, _, _) => {
                 if op == "/" {
                     *has_division = true;
-                    *has_precision_loss = true;
+                }
+            }
+            Expression::FunctionCall(_, func, _) => {
+                if let Expression::MemberAccess(_, _, member) = &**func {
+                    if ["add", "sub", "mul", "div"].contains(&member.name.as_str()) {
+                        *has_safe_math = true;
+                    }
                 }
             }
             _ => {}
@@ -2418,7 +2469,10 @@ impl SmartContractAnalyzer {
                     self.analyze_tx_origin(stmt, uses_tx_origin, has_auth_check);
                 }
             }
-            Statement::If { condition, .. } => {
+            Statement::Expression(_, expr) => {
+                self.analyze_tx_origin_expr(expr, uses_tx_origin, has_auth_check);
+            }
+            Statement::If(_, condition, then_stmt, else_stmt) => {
                 if let Expression::MemberAccess(_, obj, member) = condition {
                     if let Expression::Variable(id) = &**obj {
                         if id.name == "tx" && member.name == "origin" {
@@ -2429,9 +2483,10 @@ impl SmartContractAnalyzer {
                         }
                     }
                 }
-            }
-            Statement::Expression(_, expr) => {
-                self.analyze_tx_origin_expr(expr, uses_tx_origin, has_auth_check);
+                self.analyze_tx_origin(then_stmt, uses_tx_origin, has_auth_check);
+                if let Some(else_stmt) = else_stmt {
+                    self.analyze_tx_origin(else_stmt, uses_tx_origin, has_auth_check);
+                }
             }
             _ => {}
         }
@@ -2492,13 +2547,17 @@ impl SmartContractAnalyzer {
             Statement::Expression(_, expr) => {
                 self.analyze_reentrancy_expr(expr, has_external_call, has_state_update, has_reentrancy_guard);
             }
-            Statement::If { condition, .. } => {
+            Statement::If(_, condition, then_stmt, else_stmt) => {
                 if let Expression::MemberAccess(_, obj, member) = condition {
                     if let Expression::Variable(id) = &**obj {
                         if id.name == "nonReentrant" || member.name == "nonReentrant" {
                             *has_reentrancy_guard = true;
                         }
                     }
+                }
+                self.analyze_reentrancy(then_stmt, has_external_call, has_state_update, has_reentrancy_guard);
+                if let Some(else_stmt) = else_stmt {
+                    self.analyze_reentrancy(else_stmt, has_external_call, has_state_update, has_reentrancy_guard);
                 }
             }
             _ => {}
@@ -2560,11 +2619,14 @@ impl SmartContractAnalyzer {
                     self.analyze_integer_overflow(stmt, has_arithmetic, has_safe_math, has_bounds_check);
                 }
             }
-            Statement::If { condition, .. } => {
-                if let Expression::BinaryOperation(_, op, _, _) = condition {
-                    if op == ">" || op == "<" || op == ">=" || op == "<=" {
-                        *has_bounds_check = true;
-                    }
+            Statement::If(_, condition, then_stmt, else_stmt) => {
+                if let Expression::Less(_, _, _) | Expression::More(_, _, _) |
+                   Expression::LessEqual(_, _, _) | Expression::MoreEqual(_, _, _) => {
+                    *has_bounds_check = true;
+                }
+                self.analyze_integer_overflow(then_stmt, has_arithmetic, has_safe_math, has_bounds_check);
+                if let Some(else_stmt) = else_stmt {
+                    self.analyze_integer_overflow(else_stmt, has_arithmetic, has_safe_math, has_bounds_check);
                 }
             }
             Statement::Expression(_, expr) => {
@@ -2576,10 +2638,12 @@ impl SmartContractAnalyzer {
 
     fn analyze_integer_overflow_expr(&self, expr: &Expression, has_arithmetic: &mut bool, has_safe_math: &mut bool) {
         match expr {
-            Expression::BinaryOperation(_, op, _, _) => {
-                if ["+", "-", "*", "/"].contains(&op.as_str()) {
-                    *has_arithmetic = true;
-                }
+            Expression::Add(_, _, _)
+            | Expression::Subtract(_, _, _)
+            | Expression::Multiply(_, _, _)
+            | Expression::Divide(_, _, _)
+            | Expression::Modulo(_, _, _) => {
+                *has_arithmetic = true;
             }
             Expression::FunctionCall(_, func, _) => {
                 if let Expression::MemberAccess(_, _, member) = &**func {
@@ -2591,4 +2655,184 @@ impl SmartContractAnalyzer {
             _ => {}
         }
     }
+}
+
+// Consolidated randomness analysis
+fn check_randomness(pt: &SourceUnit, result: &mut AnalysisResult) {
+    for part in &pt.0 {
+        if let SourceUnitPart::ContractDefinition(contract) = part {
+            for part in &contract.parts {
+                if let ContractPart::FunctionDefinition(func) = part {
+                    if let Some(body) = &func.body {
+                        let mut uses_weak_source = false;
+                        let mut has_entropy_source = false;
+                        let mut has_seed_protection = false;
+                        let mut has_critical_operation = false;
+                        
+                        analyze_randomness_comprehensive(
+                            body,
+                            &mut uses_weak_source,
+                            &mut has_entropy_source,
+                            &mut has_seed_protection,
+                            &mut has_critical_operation
+                        );
+                        
+                        if uses_weak_source && !has_entropy_source && has_critical_operation {
+                            result.vulnerabilities.push(Vulnerability {
+                                severity: Severity::High.to_string(),
+                                description: format!(
+                                    "Weak random number generation in function '{}'",
+                                    func.name.as_ref().map_or("unnamed", |n| &n.name)
+                                ),
+                                location: Location::from_loc(&func.loc),
+                                code_snippet: None,
+                                recommendation: Some("Use a secure source of randomness such as Chainlink VRF.".to_string()),
+                                category: "Randomness".to_string(),
+                            });
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+fn analyze_randomness_comprehensive(
+    stmt: &Statement,
+    uses_weak_source: &mut bool,
+    has_entropy_source: &mut bool,
+    has_seed_protection: &mut bool,
+    has_critical_operation: &mut bool
+) {
+    match stmt {
+        Statement::Block { statements, loc: _, unchecked: _ } => {
+            for stmt in statements {
+                analyze_randomness_comprehensive(
+                    stmt,
+                    uses_weak_source,
+                    has_entropy_source,
+                    has_seed_protection,
+                    has_critical_operation
+                );
+            }
+        }
+        Statement::Expression(_, expr) => {
+            analyze_randomness_expr_comprehensive(
+                expr,
+                uses_weak_source,
+                has_entropy_source,
+                has_seed_protection,
+                has_critical_operation
+            );
+        }
+        _ => {}
+    }
+}
+
+fn analyze_randomness_expr_comprehensive(
+    expr: &Expression,
+    uses_weak_source: &mut bool,
+    has_entropy_source: &mut bool,
+    has_seed_protection: &mut bool,
+    has_critical_operation: &mut bool
+) {
+    match expr {
+        Expression::MemberAccess(_, obj, member) => {
+            if let Expression::Variable(id) = &**obj {
+                if id.name == "block" && (member.name == "timestamp" || member.name == "number" || member.name == "difficulty") {
+                    *uses_weak_source = true;
+                }
+            }
+        }
+        Expression::FunctionCall(_, func, _) => {
+            if let Expression::MemberAccess(_, _, member) = &**func {
+                match member.name.as_str() {
+                    "random" => {
+                        *has_entropy_source = true;
+                        *has_critical_operation = true;
+                    }
+                    "seed" => {
+                        *has_seed_protection = true;
+                    }
+                    "transfer" | "send" | "mint" => {
+                        *has_critical_operation = true;
+                    }
+                    _ => {}
+                }
+            }
+        }
+        _ => {}
+    }
+}
+
+// Consolidated gas analysis
+fn analyze_gas_usage_comprehensive(
+    stmt: &Statement,
+    gas_info: &mut GasAnalysisInfo
+) {
+    match stmt {
+        Statement::Block { statements, loc: _, unchecked: _ } => {
+            for stmt in statements {
+                analyze_gas_usage_comprehensive(stmt, gas_info);
+            }
+        }
+        Statement::For { .. } | Statement::While { .. } => {
+            gas_info.has_loop = true;
+        }
+        Statement::If(_, cond, true_block, false_block) => {
+            if let Expression::MemberAccess(_, obj, member) = cond {
+                if let Expression::Variable(id) = &**obj {
+                    if id.name == "gasleft" || member.name == "gas" {
+                        gas_info.has_gas_check = true;
+                    }
+                }
+            }
+            analyze_gas_usage_comprehensive(true_block, gas_info);
+            if let Some(false_stmt) = false_block {
+                analyze_gas_usage_comprehensive(false_stmt, gas_info);
+            }
+        }
+        Statement::Expression(_, expr) => {
+            analyze_gas_usage_expr_comprehensive(expr, gas_info);
+        }
+        _ => {}
+    }
+}
+
+fn analyze_gas_usage_expr_comprehensive(
+    expr: &Expression,
+    gas_info: &mut GasAnalysisInfo
+) {
+    match expr {
+        Expression::ArraySubscript(..) => {
+            gas_info.has_array_operation = true;
+        }
+        Expression::FunctionCall(_, func, _) => {
+            if let Expression::MemberAccess(_, _, member) = &**func {
+                match member.name.as_str() {
+                    "push" | "pop" | "length" => {
+                        gas_info.has_array_operation = true;
+                    }
+                    "sload" | "sstore" => {
+                        gas_info.storage_operations += 1;
+                    }
+                    "call" | "delegatecall" | "staticcall" => {
+                        gas_info.external_calls += 1;
+                    }
+                    _ => {}
+                }
+            }
+        }
+        _ => {}
+    }
+}
+
+// Helper struct for comprehensive gas analysis
+#[derive(Default)]
+struct GasAnalysisInfo {
+    has_loop: bool,
+    has_array_operation: bool,
+    has_gas_check: bool,
+    storage_operations: u32,
+    external_calls: u32,
 }
