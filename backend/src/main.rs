@@ -1,4 +1,4 @@
-use actix_web::{App, HttpServer, http};
+use actix_web::{App, HttpServer};
 use actix_cors::Cors;
 
 mod models;
