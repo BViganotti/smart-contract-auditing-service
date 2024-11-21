@@ -1,4 +1,4 @@
-'use client'
+'use client';
 
 import { useState } from 'react'
 import { motion } from 'framer-motion'
@@ -10,6 +10,12 @@ export default function Home() {
   const [file, setFile] = useState<File | null>(null)
   const [loading, setLoading] = useState(false)
   const [results, setResults] = useState<any>(null)
+  const [showUpload, setShowUpload] = useState(false)
+
+  const handleReset = () => {
+    setFile(null)
+    setResults(null)
+  }
 
   const handleFileUpload = async (uploadedFile: File) => {
     setFile(uploadedFile)
@@ -50,7 +56,7 @@ export default function Home() {
         </div>
         <div className="flex items-center space-x-4">
           <a 
-            href="https://github.com/yourusername/smart-contract-auditor" 
+            href="https://github.com/BViganotti/smart-contract-auditing-service" 
             target="_blank"
             rel="noopener noreferrer"
             className="text-gray-400 hover:text-white transition-colors"
@@ -70,27 +76,83 @@ export default function Home() {
           transition={{ delay: 0.2 }}
           className="max-w-5xl mx-auto"
         >
-          {!results && (
-            <div className="text-center mb-12">
-              <h2 className="text-4xl font-bold text-white mb-4">
-                Secure Your Smart Contracts
-              </h2>
-              <p className="text-gray-400 text-lg max-w-2xl mx-auto">
-                Upload your smart contract for a comprehensive security analysis. 
-                We'll identify vulnerabilities and provide actionable recommendations.
-              </p>
-            </div>
-          )}
-
-          <div className={`glass-card ${results ? 'p-0' : 'p-8'}`}>
-            {!results && <FileUpload onFileUpload={handleFileUpload} />}
-            {loading && (
-              <div className="flex flex-col items-center justify-center p-12">
-                <LoadingAnimation />
-                <p className="text-gray-400 mt-4">Analyzing your smart contract...</p>
+          <div className="flex flex-col items-center justify-center min-h-screen bg-gray-900 text-white">
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="w-full max-w-4xl mx-auto p-6"
+            >
+              <div className="text-center mb-8">
+                <h1 className="text-4xl font-bold mb-4 bg-clip-text text-transparent bg-gradient-to-r from-indigo-400 to-purple-400">
+                  Smart Contract Auditor
+                </h1>
+                <p className="text-gray-400">Choose how you want to analyze your smart contract</p>
               </div>
-            )}
-            {results && <Results data={results} />}
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* File Upload Card */}
+                <motion.div
+                  whileHover={{ scale: 1.02 }}
+                  className="bg-gray-800 rounded-xl p-6 shadow-lg cursor-pointer"
+                  onClick={() => setShowUpload(true)}
+                >
+                  <div className="flex flex-col items-center text-center">
+                    <div className="w-16 h-16 mb-4 rounded-full bg-indigo-500/20 flex items-center justify-center">
+                      <svg className="w-8 h-8 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                      </svg>
+                    </div>
+                    <h2 className="text-xl font-semibold mb-2">Upload Contract</h2>
+                    <p className="text-gray-400">Upload an existing Solidity smart contract file for analysis</p>
+                  </div>
+                </motion.div>
+
+                {/* Editor Card */}
+                <motion.a
+                  href="/editor"
+                  whileHover={{ scale: 1.02 }}
+                  className="bg-gray-800 rounded-xl p-6 shadow-lg cursor-pointer"
+                >
+                  <div className="flex flex-col items-center text-center">
+                    <div className="w-16 h-16 mb-4 rounded-full bg-purple-500/20 flex items-center justify-center">
+                      <svg className="w-8 h-8 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                      </svg>
+                    </div>
+                    <h2 className="text-xl font-semibold mb-2">Use Editor</h2>
+                    <p className="text-gray-400">Write or paste your smart contract code directly in our editor</p>
+                  </div>
+                </motion.a>
+              </div>
+
+              {/* File Upload Modal */}
+              {showUpload && (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  className="fixed inset-0 bg-black/50 flex items-center justify-center p-6"
+                >
+                  <motion.div
+                    initial={{ scale: 0.9, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    className="bg-gray-800 rounded-xl p-6 w-full max-w-2xl"
+                  >
+                    <div className="flex justify-between items-center mb-6">
+                      <h2 className="text-xl font-semibold">Upload Smart Contract</h2>
+                      <button
+                        onClick={() => setShowUpload(false)}
+                        className="text-gray-400 hover:text-white transition-colors"
+                      >
+                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                    </div>
+                    <FileUpload onFileUpload={handleFileUpload} />
+                  </motion.div>
+                </motion.div>
+              )}
+            </motion.div>
           </div>
         </motion.div>
       </div>
