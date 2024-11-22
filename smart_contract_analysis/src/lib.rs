@@ -1,3 +1,4 @@
+use analyzers::GovernanceAnalyzer;
 use rayon::prelude::*;
 use serde::Serialize;
 use solang_parser::parse;
@@ -16,6 +17,8 @@ use analyzers::{
     VulnerabilityAnalyzer,
     ComplexityAnalyzer,
     GasAnalyzer,
+    OracleAnalyzer,
+    FlashloanAnalyzer,
 };
 
 pub struct SmartContractAnalyzer {
@@ -74,8 +77,36 @@ pub struct FormattedWarning {
     pub code_snippet: String,
 }
 
+#[derive(Debug, Serialize, Clone, PartialEq)]
+pub enum VulnerabilityType {
+    FlashLoanAttack,
+    TimelockBypass,
+    UnsafeDelegateCall,
+    InsecureVoting,
+    GasOptimization,
+    UnprotectedGovernance,
+    UncheckedCalls,
+    IntegerOverflow,
+    Reentrancy,
+    DosVulnerability,
+    HighComplexity,
+    MevExposure,
+    OracleManipulation,
+    Composability,
+    StateSync,
+    UpgradePattern,
+    AccessControlIssue,
+}
+
+impl Default for VulnerabilityType {
+    fn default() -> Self {
+        VulnerabilityType::UnprotectedGovernance
+    }
+}
+
 #[derive(Debug, Serialize, Default, Clone)]
 pub struct Vulnerability {
+    pub vulnerability_type: VulnerabilityType,
     pub severity: String,
     pub description: String,
     pub location: Location,
@@ -146,6 +177,11 @@ impl SmartContractAnalyzer {
             Box::new(TimestampAnalyzer::new()),
             Box::new(AccessControlAnalyzer::new()),
             Box::new(ComplexityAnalyzer::new()),
+            Box::new(GasAnalyzer::new()),
+            Box::new(OracleAnalyzer::new()),
+            Box::new(FlashloanAnalyzer::new()),
+            Box::new(GovernanceAnalyzer::new()),
+            Box::new(OracleAnalyzer::new()),
             Box::new(GasAnalyzer::new()),
         ];
 

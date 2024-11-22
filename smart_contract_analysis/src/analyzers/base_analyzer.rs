@@ -1,4 +1,4 @@
-use crate::{Vulnerability, Location};
+use crate::{Vulnerability, Location, VulnerabilityType};
 use solang_parser::pt::*;
 use std::collections::HashSet;
 use std::error::Error;
@@ -18,8 +18,9 @@ impl BaseAnalyzer {
         }
     }
 
-    pub fn add_vulnerability(&mut self, severity: &str, description: &str, location: &Location, recommendation: Option<String>, category: &str) {
+    pub fn add_vulnerability(&mut self, vulnerability_type: VulnerabilityType, severity: &str, description: &str, location: &Location, recommendation: Option<String>, category: &str) {
         self.vulnerabilities.push(Vulnerability {
+            vulnerability_type,
             severity: severity.to_string(),
             description: description.to_string(),
             location: location.clone(),

@@ -1,7 +1,7 @@
 use solang_parser::pt::*;
 use std::error::Error;
 use std::collections::HashSet;
-use crate::{Vulnerability, Location};
+use crate::{Vulnerability, Location, VulnerabilityType};
 use super::{vulnerability_analyzer::VulnerabilityAnalyzer, BaseAnalyzer, ast_visitor::AstVisitor};
 
 pub struct AccessControlAnalyzer {
@@ -55,6 +55,7 @@ impl AccessControlAnalyzer {
 
             if is_critical {
                 self.base.add_vulnerability(
+                    VulnerabilityType::AccessControlIssue,
                     "Critical",
                     &format!("Unprotected {} operation", operation),
                     &Location::from_loc(loc),

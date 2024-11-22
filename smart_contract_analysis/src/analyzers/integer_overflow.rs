@@ -1,6 +1,6 @@
 use solang_parser::pt::*;
 use std::error::Error;
-use crate::{Vulnerability, Location};
+use crate::{Vulnerability, Location, VulnerabilityType};
 use super::{vulnerability_analyzer::VulnerabilityAnalyzer, BaseAnalyzer, ast_visitor::AstVisitor};
 
 pub struct IntegerOverflowAnalyzer {
@@ -61,6 +61,7 @@ impl IntegerOverflowAnalyzer {
         }
 
         self.base.add_vulnerability(
+            VulnerabilityType::IntegerOverflow,
             severity,
             &format!("Potential integer overflow/underflow in {} operation", op_type),
             &Location::from_loc(loc),
@@ -87,6 +88,7 @@ impl IntegerOverflowAnalyzer {
     fn report_vulnerability(&mut self, loc: &Loc, op_type: &str) -> Result<(), Box<dyn Error>> {
         if !self.has_safe_math && !self.is_safe_solidity_version() {
             self.base.add_vulnerability(
+                VulnerabilityType::IntegerOverflow,
                 "Medium",
                 &format!("Potential integer overflow/underflow in compound {} operation", op_type),
                 &Location::from_loc(loc),
@@ -321,6 +323,7 @@ impl AstVisitor for IntegerOverflowAnalyzer {
 
                     // Add warning about potential overflow
                     self.base.add_vulnerability(
+                        VulnerabilityType::IntegerOverflow,
                         "Medium",
                         &format!("Potential integer overflow in {} operation", op_type),
                         &Location::from_loc(&expr.loc()),

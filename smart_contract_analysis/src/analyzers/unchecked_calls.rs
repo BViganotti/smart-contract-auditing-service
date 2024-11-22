@@ -1,6 +1,6 @@
 use solang_parser::pt::*;
 use std::error::Error;
-use crate::{Vulnerability, Location};
+use crate::{Vulnerability, Location, VulnerabilityType};
 use super::{vulnerability_analyzer::VulnerabilityAnalyzer, BaseAnalyzer, ast_visitor::AstVisitor};
 
 pub struct UncheckedCallsAnalyzer {
@@ -44,6 +44,7 @@ impl UncheckedCallsAnalyzer {
                             .unwrap_or("unnamed function");
 
                         self.base.add_vulnerability(
+                            VulnerabilityType::UncheckedCall,
                             "High",
                             &format!("Unchecked return value from {} call", call_type),
                             &Location::from_loc(loc),
@@ -51,7 +52,7 @@ impl UncheckedCallsAnalyzer {
                                 "In function '{}': The return value of {} should be checked. Consider using require() or if statement",
                                 func_context, call_type
                             )),
-                            "Unchecked Call"
+                            "Unchecked Calls"
                         );
                     }
                 }

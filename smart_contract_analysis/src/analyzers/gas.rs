@@ -1,6 +1,6 @@
 use solang_parser::pt::*;
 use std::error::Error;
-use crate::{Vulnerability, Location};
+use crate::{Vulnerability, Location, VulnerabilityType};
 use super::{vulnerability_analyzer::VulnerabilityAnalyzer, BaseAnalyzer, ast_visitor::AstVisitor};
 
 pub struct GasAnalyzer {
@@ -91,6 +91,7 @@ impl GasAnalyzer {
                 if let Expression::MemberAccess(_, _, member) = &**func {
                     if member.name == "push" || member.name == "length" {
                         self.base.add_vulnerability(
+                            VulnerabilityType::GasOptimization,
                             "Medium",
                             "Gas-intensive array operation in loop",
                             &Location::from_loc(loc),
@@ -102,6 +103,7 @@ impl GasAnalyzer {
             }
             Expression::ArraySubscript(_, ..) => {
                 self.base.add_vulnerability(
+                    VulnerabilityType::GasOptimization,
                     "Low",
                     "Array access may be gas intensive",
                     &Location::from_loc(loc),
@@ -150,6 +152,7 @@ impl AstVisitor for GasAnalyzer {
 
         if self.current_contract_cost > 4_000_000 {
             self.base.add_vulnerability(
+                VulnerabilityType::GasOptimization,
                 "Medium",
                 &format!("High contract deployment cost ({} gas)", self.current_contract_cost),
                 &Location::from_loc(&contract.loc),
@@ -180,6 +183,7 @@ impl AstVisitor for GasAnalyzer {
 
         if self.current_function_cost > 100_000 {
             self.base.add_vulnerability(
+                VulnerabilityType::GasOptimization,
                 "Medium",
                 &format!(
                     "Function '{}' has high gas cost ({} gas)", 

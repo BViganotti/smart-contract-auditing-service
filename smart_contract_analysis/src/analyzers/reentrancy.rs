@@ -1,6 +1,6 @@
 use solang_parser::pt::*;
 use std::error::Error;
-use crate::{Vulnerability, Location};
+use crate::{Vulnerability, Location, VulnerabilityType};
 use super::{vulnerability_analyzer::VulnerabilityAnalyzer, BaseAnalyzer, ast_visitor::AstVisitor};
 
 pub struct ReentrancyAnalyzer {
@@ -64,6 +64,7 @@ impl AstVisitor for ReentrancyAnalyzer {
             
             if self.has_external_call && self.has_state_change && !self.has_reentrancy_guard {
                 self.base.add_vulnerability(
+                    VulnerabilityType::Reentrancy,
                     "Critical",
                     &format!("Potential reentrancy vulnerability in function '{}'", 
                             func.name.as_ref().map_or("unnamed", |n| &n.name)),

@@ -1,6 +1,6 @@
 use solang_parser::pt::*;
 use std::error::Error;
-use crate::{Vulnerability, Location};
+use crate::{Vulnerability, Location, VulnerabilityType};
 use super::{vulnerability_analyzer::VulnerabilityAnalyzer, BaseAnalyzer, ast_visitor::AstVisitor};
 
 pub struct ComplexityAnalyzer {
@@ -122,6 +122,7 @@ impl AstVisitor for ComplexityAnalyzer {
 
         if self.current_function_complexity > self.complexity_threshold {
             self.base.add_vulnerability(
+                VulnerabilityType::HighComplexity,
                 "Medium",
                 &format!(
                     "Function '{}' has high cyclomatic complexity ({})", 
@@ -129,8 +130,8 @@ impl AstVisitor for ComplexityAnalyzer {
                     self.current_function_complexity
                 ),
                 &Location::from_loc(&func.loc),
-                Some("Consider breaking down this function into smaller, more manageable functions".to_string()),
-                "Code Complexity"
+                Some("Consider breaking down the function into smaller, more manageable functions to improve readability and maintainability.".to_string()),
+                "Complexity"
             );
         }
 

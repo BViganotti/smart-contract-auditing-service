@@ -1,6 +1,6 @@
 use solang_parser::pt::*;
 use std::error::Error;
-use crate::{Vulnerability, Location};
+use crate::{Vulnerability, Location, VulnerabilityType};
 use super::{vulnerability_analyzer::VulnerabilityAnalyzer, BaseAnalyzer, ast_visitor::AstVisitor};
 
 pub struct DosAnalyzer {
@@ -36,6 +36,7 @@ impl DosAnalyzer {
                     .unwrap_or("unnamed function");
 
                 self.base.add_vulnerability(
+                    VulnerabilityType::DosVulnerability,
                     "High",
                     &format!("Potential DoS via unbounded loop with {}", risk_type),
                     &Location::from_loc(loc),

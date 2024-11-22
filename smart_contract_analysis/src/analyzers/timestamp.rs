@@ -1,6 +1,6 @@
 use solang_parser::pt::*;
 use std::error::Error;
-use crate::{Vulnerability, Location};
+use crate::{Vulnerability, Location, VulnerabilityType};
 use super::{vulnerability_analyzer::VulnerabilityAnalyzer, BaseAnalyzer, ast_visitor::AstVisitor};
 
 pub struct TimestampAnalyzer {
@@ -56,6 +56,7 @@ impl TimestampAnalyzer {
             let func_context = self.current_function.as_deref().unwrap_or("unnamed function");
 
             self.base.add_vulnerability(
+                VulnerabilityType::TimestampDependency,
                 "Medium",
                 &format!("Timestamp dependency in time constraint using {}", time_source),
                 &Location::from_loc(loc),
